@@ -1,0 +1,131 @@
+// Load the Amazon region geometry
+var amazonRegionGeometry = ee.FeatureCollection("projects/ee-sanjeevanilakade25/assets/amazon_basin").geometry().dissolve({'maxError': 1});
+print('Amazon Region Geometry:', amazonRegionGeometry);
+
+// Add the Amazon region geometry to the map for visualization
+Map.addLayer(amazonRegionGeometry, {color: 'blue' }, 'Amazon Rainforest Geometry', true, 0.5);
+
+// Load the Hansen Global Forest Change dataset
+var forestChangeImage = ee.Image("UMD/hansen/global_forest_change_2022_v1_10").select(['lossyear']).clip(amazonRegionGeometry);
+print('Forest Change Image:', forestChangeImage);
+
+// Center the map on the region of interest
+Map.centerObject(amazonRegionGeometry, 4);
+
+// Display the forest loss image on the map
+Map.addLayer(forestChangeImage, {bands: ['lossyear'], palette: ['FF0000']}, 'Forest Loss');
+
+// Define the years of interest
+var yearsOfInterest = ee.List.sequence(0, 22);
+
+// Map over the years and calculate deforestation area
+var deforestationAreas = yearsOfInterest.map(function(year) {
+  var lossYearMask = forestChangeImage.eq(ee.Number(year)).selfMask();
+  var pixelAreaImage = lossYearMask.multiply(ee.Image.pixelArea());
+  var areaStats = pixelAreaImage.reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: amazonRegionGeometry,
+    scale: 200,
+    maxPixels: 1e14
+  });
+
+  // Convert the image value to a Number
+  var lossArea = ee.Number(areaStats.get('lossyear'));
+
+  // Multiply pixel area by loss area (assuming 'lossyear' represents loss area)
+  var deforestationArea = lossArea.multiply(0.0001);
+
+  return lossYearMask.set('area', deforestationArea)
+    .set('year', ee.String(ee.Number(year).add(2000).toInt()));
+});
+
+// Create an ImageCollection from the mapped result
+var deforestationImageCollection = ee.ImageCollection.fromImages(deforestationAreas);
+print('Deforestation Image Collection:', deforestationImageCollection);
+
+// Aggregate the results for charting
+var yearsList = deforestationImageCollection.aggregate_array('year');
+var deforestationAreasList = deforestationImageCollection.aggregate_array('area');
+var deforestationData = ee.Dictionary.fromLists(yearsList, deforestationAreasList);
+print('Deforestation Data:', deforestationData);
+
+// Create an area chart for deforestation
+var deforestationChart = ui.Chart.array.values({
+  array: deforestationData.values(),
+  axis: 0,
+  xLabels: deforestationData.keys()
+}).setChartType('AreaChart').setOptions({
+  title: 'Deforestation Over the Years',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Deforestation Area (in hectares)'}
+});
+
+// Print the deforestation chart
+print('Deforestation Chart:', deforestationChart);
+
+// Function to calculate cumulative sum with modified logic
+var cumulativeSum = function(element, accumulator) {
+  accumulator = ee.List(accumulator);
+  return accumulator.add(ee.Number(element).add(accumulator.get(-1)));
+};
+
+// Apply cumulative sum function to the list
+var cumulativeDeforestationList = deforestationAreasList.iterate(cumulativeSum, ee.List([0]));
+print('Cumulative Deforestation List:', cumulativeDeforestationList);
+
+// Convert the cumulative list to a dictionary with years as keys
+var cumulativeDeforestationDict = ee.Dictionary.fromLists(yearsList, ee.List(cumulativeDeforestationList).slice(1));
+print('Cumulative Deforestation Dictionary:', cumulativeDeforestationDict);
+
+// Create an area chart for cumulative deforestation
+var cumulativeDeforestationChart = ui.Chart.array.values({
+  array: cumulativeDeforestationDict.values(),
+  axis: 0,
+  xLabels: cumulativeDeforestationDict.keys()
+}).setChartType('AreaChart').setOptions({
+  title: 'Cumulative Deforestation Over the Years',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Cumulative Deforestation Area  (in hectares)'}
+});
+
+// Print the cumulative deforestation chart
+print('Cumulative Deforestation Chart:', cumulativeDeforestationChart);
+
+// Function to calculate deforestation rate
+var calculateDeforestationRate = function(value, accumulator) {
+  accumulator = ee.List(accumulator);
+  var index = accumulator.size();
+  
+  // Calculate deforestation rate
+  var deforestationRate = ee.Number(value).divide(index);
+  
+  return accumulator.add(deforestationRate);
+};
+
+// Apply the function to cumulativeDeforestationList using iterate
+var deforestationRateList = ee.List(ee.List(cumulativeDeforestationList).iterate(calculateDeforestationRate, ee.List([])));
+
+// Print the result
+print('Deforestation Rate List:', deforestationRateList);
+
+var deforestationRateDict = ee.Dictionary.fromLists(yearsList, deforestationRateList.slice(1));
+print('Cumulative Deforestation Dictionary:', deforestationRateDict);
+
+// Create an area chart for cumulative deforestation
+var deforestationRateChart = ui.Chart.array.values({
+  array: deforestationRateDict.values(),
+  axis: 0,
+  xLabels: deforestationRateDict.keys()
+}).setChartType('AreaChart').setOptions({
+  title: 'Deforestation Rate Chart',
+  hAxis: { title: 'Year' },
+  vAxis: { title: 'Deforestation Rate (in hectares / year)' },
+  pointSize: 5,  
+  lineWidth: 2,  
+  series: {  
+    0: { pointShape: 'circle' }  
+  }
+});
+
+// Display the chart
+print(deforestationRateChart);
