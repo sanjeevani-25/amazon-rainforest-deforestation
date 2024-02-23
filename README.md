@@ -1,4 +1,4 @@
-# Amazon Rainforest Deforestation Analysis
+# Amazon Rainforest Deforestation Time Series Analysis
 
 This project uses Google Earth Engine's (GEE) platform to analyze deforestation in the Amazon rainforest. The analysis is based on the Hansen Global Forest Change dataset.
 
