@@ -4,8 +4,7 @@ This project uses Google Earth Engine's (GEE) platform to analyze deforestation 
 
 ## Project link
 
-(GEE Link)
-[https://code.earthengine.google.com/349b4b05936a77786f0ebf0b5c839db5?noload=true]
+[GEE Project Link](https://code.earthengine.google.com/349b4b05936a77786f0ebf0b5c839db5?noload=true)
 
 ## Features
 
